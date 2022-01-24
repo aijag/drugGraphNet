@@ -1,14 +1,9 @@
 import os
-import pickle as pkl
-
-import networkx as nx
 import numpy as np
 import scipy.sparse as sp
 import torch
 from os.path import join
-import pandas as pd
 import random
-import torch_geometric.transforms as T
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.ensemble import RandomForestClassifier
 
@@ -35,35 +30,12 @@ def create_ppi_net(ppi_net, ppi_ind):
     return gene2gene
 
 
+def rebuild_adj(train_edges, adj_shape):
+    data = np.ones(train_edges.shape[0])
+    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj_shape)
+    adj_train = adj_train + adj_train.T
+    return adj_train
 
-## Asia: Load GI in format edgelist and csv for embedding
-def load_data_gi_emb(data="data_yeast", weighted=False, edge_file="neg.edgelist", onto_file="onto_genes.csv"):
-    data_path = join(os.getcwd(), data)
-    features_path = join(data_path, onto_file)
-    features = pd.read_csv(features_path, index_col=0)
-
-    graph_path = join(data_path, edge_file)
-    if weighted:
-        G = nx.read_edgelist(graph_path, nodetype=str, data=(('weight', float),))
-    else:
-        G = nx.read_edgelist(graph_path, nodetype=str)
-    features_genes = list(features.index)
-    t = [x for x in features_genes if x not in G.nodes]
-    features = features.drop(t)
-    nodes_names = features.index.to_list()
-    if weighted:
-        adj = nx.adjacency_matrix(G, nodes_names, weight="weight")
-    else:
-        adj = nx.adjacency_matrix(G, nodes_names)
-    features_torch = torch.FloatTensor(features.values)
-    return adj, features_torch, nodes_names
-
-
-def parse_index_file(filename):
-    index = []
-    for line in open(filename):
-        index.append(int(line.strip()))
-    return index
 
 def ismember(a, b, tol=5):
     rows_close = np.all(np.round(a - b[:, None], tol) == 0, axis=-1)
@@ -80,6 +52,7 @@ def sparse_to_tuple(sparse_mx, weighted=False):
         coords = coords[values == 1]
     return coords, values, shape
 
+
 def get_edges(adj):
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]), shape=adj.shape)
     adj.eliminate_zeros()
@@ -88,76 +61,13 @@ def get_edges(adj):
     return sparse_to_tuple(adj_triu)[0]
 
 
-def mask_test_edges(adj):
-    # Function to build test set with 10% positive links
-    # NOTE: Splits are randomized and results might slightly deviate from reported numbers in the paper.
-    # TODO: Clean up.
-    # Remove diagonal elements
-    number_false_samples=1
-
-    edges = get_edges(adj)
-    edges_all = sparse_to_tuple(adj)[0]
-    num_test = int(np.floor(edges.shape[0] / 6.))
-    num_val = int(np.floor(edges.shape[0] / 12.))
-    all_edge_idx = list(range(edges.shape[0]))
-    np.random.shuffle(all_edge_idx)
-    val_edge_idx = all_edge_idx[:num_val]
-    test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
-    test_edges = edges[test_edge_idx]
-    val_edges = edges[val_edge_idx]
-    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
-    test_edges_false = []
-    while len(test_edges_false) < number_false_samples*len(test_edges):
-        idx_i = np.random.randint(0, adj.shape[0])
-        idx_j = np.random.randint(0, adj.shape[0])
-        if idx_i == idx_j:
-            continue
-        if ismember([idx_i, idx_j], edges_all):
-            continue
-        if test_edges_false:
-            if ismember([idx_j, idx_i], np.array(test_edges_false)):
-                continue
-            if ismember([idx_i, idx_j], np.array(test_edges_false)):
-                continue
-        test_edges_false.append([idx_i, idx_j])
-    val_edges_false = []
-    while len(val_edges_false) < number_false_samples*len(val_edges):
-        idx_i = np.random.randint(0, adj.shape[0])
-        idx_j = np.random.randint(0, adj.shape[0])
-        if idx_i == idx_j:
-            continue
-        if ismember([idx_i, idx_j], edges_all):
-            continue
-        if test_edges_false:
-            if ismember([idx_j, idx_i], np.array(test_edges_false)):
-                continue
-            if ismember([idx_i, idx_j], np.array(test_edges_false)):
-                continue
-        if val_edges_false:
-            if ismember([idx_j, idx_i], val_edges_false):
-                continue
-            if ismember([idx_i, idx_j], val_edges_false):
-                continue
-        val_edges_false.append([idx_i, idx_j])
-    assert ~ismember(test_edges_false, edges_all)
-    assert ~ismember(val_edges_false, edges_all)
-    assert ~ismember(test_edges_false, np.array(val_edges_false))
-    assert ~ismember(val_edges, train_edges)
-    assert ~ismember(test_edges, train_edges)
-    assert ~ismember(val_edges, test_edges)
-    data = np.ones(train_edges.shape[0])
-    # Re-build adj matrix
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj.shape)
-    adj_train = adj_train + adj_train.T
-    # NOTE: these edge lists only contain single direction of edge!
-    return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
-
 def prepare_for_cv(adj, weighted=False):
     edges = get_edges(adj)
     edges_all = sparse_to_tuple(adj, weighted=weighted)[0]
     all_edge_idx = list(range(edges.shape[0]))
     np.random.shuffle(all_edge_idx)
     return edges, edges_all, all_edge_idx
+
 
 def prepare_for_cv_score(data, column_score_name='score'):
     edges_pos = data[data[column_score_name] == 1].drop(columns=column_score_name).values
@@ -204,7 +114,7 @@ def prepare_for_cv_drug_gi(data, gi_adj, size):
     np.random.shuffle(edge_idx_neu_shuffled)
     return edges, edges_neu, all_edge_idx_shuffled, edge_idx_neu_shuffled, adj_drug
 
-## CV_version
+
 def mask_test_edges_cv(edges, edges_all, all_edge_idx, adj_shape, i, total_splits=6, semi=False):
     num_test = int(np.floor(edges.shape[0] / total_splits))
     num_val = int(np.floor(edges.shape[0] / (2*total_splits)))
@@ -255,17 +165,7 @@ def mask_test_edges_cv(edges, edges_all, all_edge_idx, adj_shape, i, total_split
                 continue
         val_edges_false[samples, :] = [idx_i, idx_j]
         samples += 1
-    # assert ~ismember(test_edges_false, edges_all)
-    # assert ~ismember(val_edges_false, edges_all)
-    # assert ~ismember(test_edges_false, np.array(val_edges_false))
-    # assert ~ismember(val_edges, train_edges)
-    # assert ~ismember(test_edges, train_edges)
-    # assert ~ismember(val_edges, test_edges)
-    data = np.ones(train_edges.shape[0])
-    # Re-build adj matrix
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj_shape)
-    adj_train = adj_train + adj_train.T
-    # NOTE: these edge lists only contain single direction of edge!
+    adj_train = rebuild_adj(train_edges, adj_shape)
     return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
 
 def pair_in_list(pair, list):
@@ -328,10 +228,7 @@ def mask_test_edges_separate_genes(edges, edges_all, adj_shape):
                 continue
         val_edges_false[samples, :] = [idx_i, idx_j]
         samples += 1
-    data = np.ones(train_edges.shape[0])
-    # Re-build adj matrix
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj_shape)
-    adj_train = adj_train + adj_train.T
+    adj_train = rebuild_adj(train_edges, adj_shape)
     return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
 
 
@@ -356,20 +253,7 @@ def mask_test_edges_gi_cv(edges, edges_all, all_edge_idx, neutrals, all_neu_idx,
     test_edges_false = neutrals[test_edge_idx]
     val_edges_false = neutrals[val_edge_idx]
     train_edges_false = np.delete(neutrals, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
-
-    # assert ~ismember(test_edges_false, edges_all)
-    # assert ~ismember(val_edges_false, edges_all)
-    # assert ~ismember(val_edges, train_edges)
-    # assert ~ismember(test_edges, train_edges)
-    # assert ~ismember(val_edges, test_edges)
-
-    data = np.ones(train_edges.shape[0])
-
-    # Re-build adj matrix
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj_shape)
-    adj_train = adj_train + adj_train.T
-
-    # NOTE: these edge lists only contain single direction of edge!
+    adj_train = rebuild_adj(train_edges, adj_shape)
     return adj_train, train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
 
 def split_train_test_edges(edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits, all_neu, binarize, semi):
@@ -438,22 +322,14 @@ def mask_test_edges_dep_cv(edges, edge_idx, edges_neutrals, edge_idx_neu, gi, ad
         train_edges_t = train_edges + gi
     else:
         train_edges_t = train_edges
-    ## Create adj array
-    data = np.ones(train_edges.shape[0])
-    adj_train = sp.csr_matrix((data, (train_edges_t[:, 0], train_edges_t[:, 1])), shape=adj_shape)
-    adj_train = adj_train + adj_train.T
+    adj_train = rebuild_adj(train_edges, adj_shape)
     return adj_train, train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
 
 def mask_test_edges_drug(cell2gene, drug2gene, ppi_adj, edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits=5, all_neu=False, binarize=False, semi=False, no_sp=False):
     ## Create neutral and positive edges for train/val/test
     train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false = split_train_test_edges(
         edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits, all_neu, binarize, semi)
-
-    ## Create adj array
-    data = np.ones(train_edges.shape[0])
-    # Re-build adj matrix
-    adj_predict = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=[cell2gene.shape[0]+drug2gene.shape[0],cell2gene.shape[0]+drug2gene.shape[0]])
-    adj_predict = (adj_predict + adj_predict.T).toarray()
+    adj_predict = rebuild_adj(train_edges, [cell2gene.shape[0]+drug2gene.shape[0],cell2gene.shape[0]+drug2gene.shape[0]])
     if no_sp:
         data_path = join(os.getcwd(), "data_drug")
         cl2cl = np.load(join(data_path, "cl2cl.npy"))
@@ -470,30 +346,6 @@ def mask_test_edges_drug(cell2gene, drug2gene, ppi_adj, edges, edges_neutrals, e
         adj_array = np.where(adj_array > 0, 1, 0)
     temp2 = np.concatenate((cell2gene.T, drug2gene.T, adj_array), axis=1) ### New change to remove the nans - need to recheck later
     adj = np.concatenate((temp1, temp2), axis=0)
-    adj_train = sp.csr_matrix(adj)
-    return adj_train, train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
-
-
-def mask_test_edges_dep(cell2gene, ppi_adj, edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits=6, all_neu=False, binarize=False, semi=False, no_sp=False):
-    ## Create neutral and positive edges for train/val/test
-    train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false = split_train_test_edges(edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits, all_neu, binarize, semi)
-
-    if no_sp:
-        data_path = join(os.getcwd(), "data_dependency")
-        cl2cl = np.load(join(data_path, "cl2cl.npy"))
-        cl2cl = cl2cl - np.identity(cl2cl.shape[0])
-    else:
-        cl2cl = np.zeros([cell2gene.shape[0], cell2gene.shape[0]])
-    adj_array = np.nan_to_num(ppi_adj) ## check case that .toarray() is required
-    if binarize:
-        adj_array = np.where(adj_array > 0, 1, 0)
-    ### Create the main array ###
-    temp1 = np.concatenate((cl2cl, cell2gene), axis=1)
-    temp2 = np.concatenate((cell2gene.T, adj_array), axis=1) ### New change to remove the nans - need to recheck later
-    adj = np.concatenate((temp1, temp2), axis=0)
-    ## Refil cell2gene array with train edges
-    for pair in train_edges:
-        adj[pair[0]][pair[1]] = 1
     adj_train = sp.csr_matrix(adj)
     return adj_train, train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
 
@@ -545,11 +397,7 @@ def mask_test_edges_drug_gi(cell2gene, drug2gene, adj_drug, edges, edges_neutral
         test_edges_false = edges_neutrals[test_edge_idx]
         train_edges_false = np.delete(edges_neutrals, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
 
-    ## Create adj array
-    data = np.ones(train_edges.shape[0])
-    # Re-build adj matrix
-    adj_predict = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=[cell2gene.shape[1], cell2gene.shape[1]])
-    adj_predict = (adj_predict + adj_predict.T).toarray()
+    adj_predict = rebuild_adj(train_edges, [cell2gene.shape[1], cell2gene.shape[1]])
     if no_sp:
         data_path = join(os.getcwd(), "data_drug")
         cl2cl = np.load(join(data_path, "cl2cl.npy"))
@@ -593,45 +441,6 @@ def create_false_edges(edges_all, num_of_edges, max_num):
         edges_false[samples, :] = [idx_i, idx_j]
         samples += 1
     return edges_false.astype(int)
-
-## Second split version - we will include all the sumples this time
-def mask_test_edges_gi(adj, neutrals):
-    edges = get_edges(adj)
-    edges_all = sparse_to_tuple(adj)[0]
-    num_test = int(np.floor(edges.shape[0] / 6.))
-    num_val = int(np.floor(edges.shape[0] / 12.))
-
-    all_edge_idx = list(range(edges.shape[0]))
-    np.random.shuffle(all_edge_idx)
-    val_edge_idx = all_edge_idx[:num_val]
-    test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
-    test_edges = edges[test_edge_idx]
-    val_edges = edges[val_edge_idx]
-    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]), axis=0)
-
-    num_neg_test = int(np.floor(len(neutrals) / 6.))
-    num_neg_val = int(np.floor(len(neutrals) / 12.))
-    all_neu_idx = list(range(neutrals.shape[0]))
-    np.random.shuffle(all_neu_idx)
-    val_edge_idx = all_neu_idx[:num_neg_val]
-    test_edge_idx = all_neu_idx[num_neg_val:(num_neg_val + num_neg_test)]
-    test_edges_false = neutrals[test_edge_idx]
-    val_edges_false = neutrals[val_edge_idx]
-
-    assert ~ismember(test_edges_false, edges_all)
-    assert ~ismember(val_edges_false, edges_all)
-    assert ~ismember(val_edges, train_edges)
-    assert ~ismember(test_edges, train_edges)
-    assert ~ismember(val_edges, test_edges)
-
-    data = np.ones(train_edges.shape[0])
-
-    # Re-build adj matrix
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape=adj.shape)
-    adj_train = adj_train + adj_train.T
-
-    # NOTE: these edge lists only contain single direction of edge!
-    return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
 
 
 def preprocess_graph(adj):
@@ -690,22 +499,6 @@ def compare_to_rf_onto(train_edges, train_edges_false, val_edges, val_edges_fals
     print(f'AUC_RF: {auc:.5} ; AP_RF: {ap:.5}')
     return auc, ap
 
-# def compare_to_rf_onto(train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false, features, n_estimators=100):
-#     train_pairs = np.vstack([train_edges, val_edges, train_edges_false, val_edges_false])
-#     train_labels = np.hstack([np.ones(len(train_edges)+len(val_edges)), np.zeros(len(train_edges_false)+len(val_edges_false))])
-#     test_pairs = np.vstack([test_edges, test_edges_false])
-#     test_labels = np.hstack([np.ones(len(test_edges)), np.zeros(len(test_edges_false))])
-#     print("1")
-#     train_onto = create_double_features(train_pairs, np.array(features))
-#     test_onto = create_double_features(test_pairs, np.array(features))
-#     print("2")
-#     classifier = RandomForestClassifier(n_estimators=n_estimators, max_depth=100, min_samples_split=5, n_jobs=-1)
-#     classifier.fit(train_onto, train_labels)
-#     print("3")
-#     pre = classifier.predict_proba(test_onto)[:,1]
-#     auc, ap = roc_auc_score(test_labels, pre), average_precision_score(test_labels, pre)
-#     print(f'AUC_RF: {auc:.5} ; AP_RF: {ap:.5}')
-#     return auc, ap
 
 ## Temp split for including training data
 def mask_test_edges_cv_temp(edges_all, train_edges, val_edges, val_edges_false, test_edges, test_edges_false):
