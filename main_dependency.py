@@ -35,6 +35,7 @@ parser.add_argument('--all_neu', action='store_true', help='Include all neutral 
 parser.add_argument('--split', action='store_true', help='Split pairs to independent genes - no overlapping genes between test and train samples')
 parser.add_argument('--p_gi', action='store_true', help='Predict GI instead of Drug sensitivity')
 parser.add_argument('--semi', action='store_true', help='Semi supervised learning')
+parser.add_argument('--alpha', type=float, default=0.5, help='vae proportion loss')
 parser.add_argument('--random_f', action='store_true', help='Random features')
 parser.add_argument('--random_s', action='store_true', help='Random structure')
 parser.add_argument('--compare', action='store_true', help='Compare to other model')
