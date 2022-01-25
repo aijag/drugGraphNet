@@ -319,7 +319,7 @@ def mask_test_edges_dep_cv(edges, edge_idx, edges_neutrals, edge_idx_neu, gi, ad
     train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false = split_train_test_edges(
         edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits, all_neu, binarize, semi)
     if gi:
-        train_edges_t = train_edges + gi
+        train_edges_t = train_edges + np.array(gi)
     else:
         train_edges_t = train_edges
     adj_train = rebuild_adj(train_edges_t, adj_shape)
