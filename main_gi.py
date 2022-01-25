@@ -41,7 +41,7 @@ args = parser.parse_args()
 
 
 def gae_for_gi(args):
-    final_res_auc, final_res_ap, final_res_auc_rf, final_res_ap_rf = [], [], [], []
+    final_res_auc, final_res_ap, final_res_auc_rf, final_res_ap_rf = np.zeros(args.nos), np.zeros(args.nos), np.zeros(args.nos), np.zeros(args.nos)
     best_model_path = join('Output', f'best-model_{args.dataset}_{args.num}.pt')
     plot_learning_file = join('Output', f'Loss_{args.dataset}_{args.num}.pt')
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
