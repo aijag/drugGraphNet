@@ -322,7 +322,7 @@ def mask_test_edges_dep_cv(edges, edge_idx, edges_neutrals, edge_idx_neu, gi, ad
         train_edges_t = train_edges + gi
     else:
         train_edges_t = train_edges
-    adj_train = rebuild_adj(train_edges, adj_shape)
+    adj_train = rebuild_adj(train_edges_t, adj_shape)
     return adj_train, train_edges, train_edges_false, val_edges, val_edges_false, test_edges, test_edges_false
 
 def mask_test_edges_drug(cell2gene, drug2gene, ppi_adj, edges, edges_neutrals, edge_idx, edge_idx_neu, i, total_splits=5, all_neu=False, binarize=False, semi=False, no_sp=False):
