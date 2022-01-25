@@ -119,14 +119,15 @@ def load_data_dependency(data, net, all_net, random_features=False, random_struc
     ## Read cell_drug main data
     cell_gene_data = pd.read_csv(join(data_path, data_file_name), usecols=['line', 'gene', 'score'])
     cell_ind = index[:len(np.unique(cell_gene_data['line']))]
+    gene_data = np.unique(cell_gene_data['gene'])
     genes_nodes = list(genes_net.nodes)
-    prob_ind = [x for x in index[len(cell_ind):] if x not in genes_nodes]
+    prob_ind = [x for x in index[len(cell_ind):] if x not in genes_nodes and x not in gene_data]
     features = features.drop(prob_ind)
-    gene_ind = index[len(cell_ind):]
+    gene_ind = list(features.index[len(cell_ind):])
     features = features.values
     ## Change data to num of location
     #######################################
-    dict = {g: i for i, g in enumerate(index[:len(cell_ind) + len(gene_ind)])}
+    dict = {g: i for i, g in enumerate(index[:len(cell_ind)+len(gene_ind)])}
     cell_gene_data['line'] = cell_gene_data['line'].map(dict.get)
     cell_gene_data['gene'] = cell_gene_data['gene'].map(dict.get)
     genes_edges = [[dict[g[0]], dict[g[1]]] for g in genes_net.edges]
