@@ -41,6 +41,7 @@ parser.add_argument('--random_s', action='store_true', help='Random structure')
 parser.add_argument('--compare', action='store_true', help='Compare to other model')
 parser.add_argument('--rf_est', type=int, default=100, help='number of estimators for RF comparison')
 parser.add_argument('--no_sp', action='store_true', help='Add cl2cl and drug2drug values')
+parser.add_argument('--plt', action='store_true', help='Plot graphs')
 args = parser.parse_args()
 
 
