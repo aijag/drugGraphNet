@@ -129,7 +129,7 @@ def load_data_dependency(data, net, all_net, random_features=False, random_struc
     dict = {g: i for i, g in enumerate(index[:len(cell_ind) + len(gene_ind)])}
     cell_gene_data['line'] = cell_gene_data['line'].map(dict.get)
     cell_gene_data['gene'] = cell_gene_data['gene'].map(dict.get)
-    genes_edges = [[g[0] + len(cell_ind), g[1] + len(cell_ind)] for g in genes_net.edges]
+    genes_edges = [[dict[g[0]], dict[g[1]]] for g in genes_net.edges]
     if random_structure:
         genes_values = np.unique(cell_gene_data['gene'])
         genes_edges = sample(list(combinations(genes_values, 2)), len(genes_edges))
