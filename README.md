@@ -6,14 +6,16 @@ Here we develop novel models that build on variational graph auto-encoders and c
 * [General info](#general-info)
 * [Technologies](#technologies)
 * [Setup](#setup) -->
-
+___
 ## Requirements:
 
 You can also installed the python environment by running:
-   $ pip install -r requirements.txt
-   
+   '$ pip install -r requirements.txt'
+
+___
  ## How to run:
  
+___
  ## Example:
  
  
