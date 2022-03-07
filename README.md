@@ -10,7 +10,7 @@ ___
 ## Requirements:
 
 You can also installed the python environment by running:
-   '$ pip install -r requirements.txt'
+   `$ pip install -r requirements.txt`
 
 ___
  ## How to run:
