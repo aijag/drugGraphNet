@@ -14,7 +14,9 @@ You can also installed the python environment by running:
 
 ___
  ## How to run:
- 
+ Follow the following steps:
+ Step1: decompress data files
+ `unzip data.zip`
 ___
  ## Example:
  
