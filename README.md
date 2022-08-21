@@ -16,10 +16,20 @@ ___
  ## How to run:
  Follow the following steps:
  
- Step1: decompress data files
+ Step1: Select the prediction task and the required dataset.
  
- `unzip data.zip`
-___
- ## Example:
+ Step2: Decompress the required data file, for example:
+ 
+ `unzip data_sl.zip`
+
+  Step3: Run the required file based on your task prediction:
+  * For training Genetic Interations:
+  `$ python main_gi.py --dataset selected_dataset`
+  
+  * For training Cancer Dependency:
+  `$ python main_dependency.py --dataset selected_dataset`
+  
+  * For training Drug Sensitivity:
+  `$ python main_drug.py --dataset selected_dataset`
  
  
